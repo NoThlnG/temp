@@ -7,12 +7,12 @@
 #include "threads/synch.h"
 /* States in a thread's life cycle. */
 enum thread_status
-  {
-    THREAD_RUNNING,     /* Running thread. */
-    THREAD_READY,       /* Not running but ready to run. */
-    THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
-  };
+{
+  THREAD_RUNNING,     /* Running thread. */
+  THREAD_READY,       /* Not running but ready to run. */
+  THREAD_BLOCKED,     /* Waiting for an event to trigger. */
+  THREAD_DYING        /* About to be destroyed. */
+};
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
@@ -35,42 +35,42 @@ struct thread;
    thread's kernel stack, which grows downward from the top of
    the page (at offset 4 kB).  Here's an illustration:
 
-        4 kB +---------------------------------+
-             |          kernel stack           |
-             |                |                |
-             |                |                |
-             |                V                |
-             |         grows downward          |
-             |                                 |
-             |                                 |
-             |                                 |
-             |                                 |
-             |                                 |
-             |                                 |
-             |                                 |
-             |                                 |
-             +---------------------------------+
-             |              magic              |
-             |                :                |
-             |                :                |
-             |               name              |
-             |              status             |
-        0 kB +---------------------------------+
+   4 kB +---------------------------------+
+   |          kernel stack           |
+   |                |                |
+   |                |                |
+   |                V                |
+   |         grows downward          |
+   |                                 |
+   |                                 |
+   |                                 |
+   |                                 |
+   |                                 |
+   |                                 |
+   |                                 |
+   |                                 |
+   +---------------------------------+
+   |              magic              |
+   |                :                |
+   |                :                |
+   |               name              |
+   |              status             |
+   0 kB +---------------------------------+
 
    The upshot of this is twofold:
 
-      1. First, `struct thread' must not be allowed to grow too
-         big.  If it does, then there will not be enough room for
-         the kernel stack.  Our base `struct thread' is only a
-         few bytes in size.  It probably should stay well under 1
-         kB.
+   1. First, `struct thread' must not be allowed to grow too
+   big.  If it does, then there will not be enough room for
+   the kernel stack.  Our base `struct thread' is only a
+   few bytes in size.  It probably should stay well under 1
+   kB.
 
-      2. Second, kernel stacks must not be allowed to grow too
-         large.  If a stack overflows, it will corrupt the thread
-         state.  Thus, kernel functions should not allocate large
-         structures or arrays as non-static local variables.  Use
-         dynamic allocation with malloc() or palloc_get_page()
-         instead.
+   2. Second, kernel stacks must not be allowed to grow too
+   large.  If a stack overflows, it will corrupt the thread
+   state.  Thus, kernel functions should not allocate large
+   structures or arrays as non-static local variables.  Use
+   dynamic allocation with malloc() or palloc_get_page()
+   instead.
 
    The first symptom of either of these problems will probably be
    an assertion failure in thread_current(), which checks that
@@ -85,56 +85,58 @@ struct thread;
    blocked state is on a semaphore wait list. */
 
 struct thread
-  {
-    /* Owned by thread.c. */
-    tid_t tid;                          /* Thread identifier. */
-    enum thread_status status;          /* Thread state. */
-    char name[16];                      /* Name (for debugging purposes). */
-    uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
-    struct list_elem allelem;           /* List element for all threads list. */
+{
+  /* Owned by thread.c. */
+  tid_t tid;                          /* Thread identifier. */
+  enum thread_status status;          /* Thread state. */
+  char name[16];                      /* Name (for debugging purposes). */
+  uint8_t *stack;                     /* Saved stack pointer. */
+  int priority;                       /* Priority. */
+  struct list_elem allelem;           /* List element for all threads list. */
 
-    /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
+  /* Shared between thread.c and synch.c. */
+  struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
+  /* Owned by userprog/process.c. */
+  uint32_t *pagedir;                  /* Page directory. */
 #endif
 
-    /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
+  /* Owned by thread.c. */
+  unsigned magic;                     /* Detects stack overflow. */
 
-		/* ----- for me ---- */
-	
-		int oPriority;		// original priority
-		struct list donate_list;	// donate_list
+  /* ----- for me ---- */
 
-		int nice;			// niceness
-		int recent_cpu;	// fixed_point format
+  int oPriority;		// original priority
+  struct list donate_list;	// donate_list
 
-		// project2
-		struct child_info *Info;
-		struct file* e_file;
+  int nice;			// niceness
+  int recent_cpu;	// fixed_point format
+
+  // project2
+  struct child_info *Info;
+  struct file* e_file;
+
+  struct dir* cwd;
 };
 
 struct donate
 {
-	struct list_elem elem;
-	struct lock *l;
-	struct thread *donator;
+  struct list_elem elem;
+  struct lock *l;
+  struct thread *donator;
 };
 
 struct child_info
 {
-	struct thread *parent;
-	struct list_elem elem;
-	struct semaphore w_sema;
-	struct semaphore e_sema;
-	tid_t tid;
-	int exitCode;
-	bool alreadyWait;
-	bool loadFail;
+  struct thread *parent;
+  struct list_elem elem;
+  struct semaphore w_sema;
+  struct semaphore e_sema;
+  tid_t tid;
+  int exitCode;
+  bool alreadyWait;
+  bool loadFail;
 };
 
 struct child_info* getCIFromTid(tid_t tid);
