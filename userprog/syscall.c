@@ -211,7 +211,7 @@ void syscall_create(struct intr_frame *f,int argsNum){
 		return;
 	}
 	lock_acquire(&FILELOCK);
-	bool result = filesys_create(file,initial_size);
+	bool result = filesys_create(file, initial_size, true);
 	lock_release(&FILELOCK);
 	f->eax = (int)result;
 }
