@@ -31,8 +31,6 @@ int currentFd(struct thread *cur, bool);
 void* getFile(int fd,struct thread *cur);
 struct fd_elem* getFD_elem(int fd, struct thread *cur);
 
-void elemFile(struct file *file);
-
 void allClose(struct thread *cur);
 
 struct fd_elem{

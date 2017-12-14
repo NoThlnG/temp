@@ -137,9 +137,9 @@ void allClose(struct thread *cur)
     struct fd_elem *fe = list_entry(e,struct fd_elem, elem);
     if(fe->owner == cur)
     {
-      if(fe->fd % 2 == 1)
+      if(fe->fd % 2 == 1) 
         file_close(fe->file);
-      else 
+      else  
         dir_close(fe->dir);
       list_remove(e);	
       e=list_prev(e);
@@ -277,11 +277,13 @@ void syscall_open(struct intr_frame *f,int argsNum){
 
   lock_acquire(&FILELOCK);
   struct file* file = filesys_open(filename);
+  lock_release(&FILELOCK);
   if(file != NULL){
     struct fd_elem *fe = (struct fd_elem *)malloc(sizeof(struct fd_elem));
     fe->owner = cur;
     if(!inode_is_dir(file_get_inode(file))) {
       fe->file = file;
+      fe->dir = NULL;
       fe->fd = currentFd(fe->owner, false) + 2;
       fe->filename = filename;
     
@@ -291,13 +293,13 @@ void syscall_open(struct intr_frame *f,int argsNum){
       } else fe->isEXE = false;
     }
     else {
+      fe->file = NULL;
       fe->dir = (struct dir *)file;
       fe->fd = currentFd(fe->owner, true) + 2;
     }
     list_push_back(&fd_list,&fe->elem);
     f->eax = fe->fd;
   } else f->eax = -1;
-  lock_release(&FILELOCK);
 }
 
 void syscall_filesize(struct intr_frame *f,int argsNum){
@@ -307,12 +309,10 @@ void syscall_filesize(struct intr_frame *f,int argsNum){
 
   int fd = *(int *)(esp+4);
 
-  lock_acquire(&FILELOCK);
   struct file *file = getFile(fd,thread_current());
   if(file != NULL)
     f->eax = file_length(file);
   else f->eax = -1;
-  lock_release(&FILELOCK);
 }
 
 void syscall_read(struct intr_frame *f,int argsNum){
@@ -325,7 +325,6 @@ void syscall_read(struct intr_frame *f,int argsNum){
   uint32_t size = *(uint32_t *)(esp+12);
 
   if(buffer>(char*)0xc0000000) syscall_exit(f,-1);
-  lock_acquire(&FILELOCK);
   if(fd == 0){
     uint32_t i;
     for(i = 0; i < size; i++)
@@ -345,7 +344,6 @@ void syscall_read(struct intr_frame *f,int argsNum){
     }
     else f->eax = -1;
   }
-  lock_release(&FILELOCK);
 }
 
 void syscall_write (struct intr_frame *f,int argsNum)
@@ -357,7 +355,6 @@ void syscall_write (struct intr_frame *f,int argsNum)
   int fd = *(int *)(esp+4);
   char* buffer = *(char **)(esp+8);
   uint32_t size = *(uint32_t *)(esp+12);
-  lock_acquire(&FILELOCK);
   if (fd == 1)
   {
     putbuf((char *)buffer,size);
@@ -366,12 +363,13 @@ void syscall_write (struct intr_frame *f,int argsNum)
     f->eax = -1;
   } else {
     struct file *file = getFile(fd,thread_current());
-    if (file != NULL)
+    if (file != NULL) {
+      lock_acquire(&FILELOCK);
       f->eax = file_write(file,buffer,size);
-
+      lock_release(&FILELOCK);
+    }
     else f->eax = -1;
   }
-  lock_release(&FILELOCK);
 }
 
 void syscall_seek(struct intr_frame *f,int argsNum){
@@ -395,29 +393,11 @@ void syscall_tell(struct intr_frame *f,int argsNum){
 
   int fd = *(int *)(esp+4);
 
-  lock_acquire(&FILELOCK);
   struct file *file = getFile(fd,thread_current());
   if(file != NULL)
   {
     f->eax = file_tell(file);
   } else f->eax = -1;
-  lock_release(&FILELOCK);
-
-}
-
-void elemFile(struct file *file)
-{
-  struct list_elem *e = list_begin(&fd_list);
-  for(;e!=list_end(&fd_list);e=list_next(e))
-  {
-    struct fd_elem *fe = list_entry(e,struct fd_elem, elem);
-    if(fe->file == file && fe->owner == thread_current())
-    {
-      list_remove(e);
-      free(fe);
-      return;
-    }
-  }
 }
 
 void syscall_close(struct intr_frame *f,int argsNum){
@@ -427,14 +407,28 @@ void syscall_close(struct intr_frame *f,int argsNum){
   int fd = *(int *)(esp+4);
 
   struct thread* cur = thread_current();
-  struct file *file = getFile(fd,cur);
-  lock_acquire(&FILELOCK);
-  if(file != NULL)
+  struct fd_elem *fe = getFD_elem(fd, cur);
+  if(fe->fd %2 == 1)
   {
-    file_close(file);
-    elemFile(file);
+    struct file* file = fe->file;
+    if(file != NULL)
+    {
+      lock_acquire(&FILELOCK);
+      file_close(file);
+      lock_release(&FILELOCK);
+      list_remove(&fe->elem); 
+      free(fe); 
+    }
   }
-  lock_release(&FILELOCK);
+  else
+  {
+    struct dir* dir = fe->dir;
+    if(dir != NULL) {
+      dir_close(dir); 
+      list_remove(&fe->elem); 
+      free(fe);
+    } 
+  }
 }
 
 
