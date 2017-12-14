@@ -30,6 +30,17 @@ struct indir_block
 {
   block_sector_t ptr[128];
 };
+/* In-memory inode. */
+struct inode 
+{
+  struct list_elem elem;              /* Element in inode list. */
+  block_sector_t sector;              /* Sector number of disk location. */
+  int open_cnt;                       /* Number of openers. */
+  bool removed;                       /* True if deleted, false otherwise. */
+  int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+  struct inode_disk data;
+  off_t read_length;
+};
 
 bool inode_alloc (struct inode_disk *disk_inode);
 off_t inode_expand (struct inode *inode, off_t new_length);
@@ -75,19 +86,6 @@ static size_t bytes_to_double_indirect_sector (off_t size)
   }
   return 1;
 }
-
-/* In-memory inode. */
-struct inode 
-{
-  struct list_elem elem;              /* Element in inode list. */
-  block_sector_t sector;              /* Sector number of disk location. */
-  int open_cnt;                       /* Number of openers. */
-  bool removed;                       /* True if deleted, false otherwise. */
-  int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-  struct inode_disk data;
-  off_t read_length;
-  struct lock lock;
-};
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
@@ -181,27 +179,33 @@ inode_create (block_sector_t sector, off_t length, bool isdir)
   return success;
 }
 
-/* Reads an inode from SECTOR
-   and returns a `struct inode' that contains it.
-   Returns a null pointer if memory allocation fails. */
-  struct inode *
-inode_open (block_sector_t sector)
-{
+struct inode* inode_is_open(block_sector_t sector) {
   struct list_elem *e;
   struct inode *inode;
 
-  /* Check whether this inode is already open. */
-  for (e = list_begin (&open_inodes); e != list_end (&open_inodes);
-      e = list_next (e)) 
+  for(e = list_begin(&open_inodes); e!=list_end(&open_inodes); e=list_next(e))
   {
     inode = list_entry (e, struct inode, elem);
-    if (inode->sector == sector) 
-    {
-      inode_reopen (inode);
-      return inode; 
-    }
+    if(inode->sector == sector)
+      return inode;
   }
+  return NULL;
+}
 
+/* Reads an inode from SECTOR
+   and returns a `struct inode' that contains it.
+   Returns a null pointer if memory allocation fails. */
+struct inode *
+inode_open (block_sector_t sector)
+{
+  struct inode* inode = inode_is_open(sector);
+  
+  if(inode)
+  {
+    inode_reopen (inode);
+    return inode; 
+  }
+  
   /* Allocate memory. */
   inode = malloc (sizeof *inode);
   if (inode == NULL)
@@ -213,7 +217,6 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  lock_init(&inode->lock);
   block_read(fs_device, inode->sector, &inode->data);
   inode->read_length = inode->data.length;
   return inode;
@@ -229,7 +232,7 @@ inode_reopen (struct inode *inode)
 }
 
 /* Returns INODE's inode number. */
-  block_sector_t
+block_sector_t
 inode_get_inumber (const struct inode *inode)
 {
   return inode->sector;
@@ -256,8 +259,8 @@ inode_close (struct inode *inode)
       free_map_release (inode->sector, 1);
       inode_dealloc(inode);
     }
-//    else
-//      block_write(fs_device, inode->sector, &inode->data);
+    else
+      block_write(fs_device, inode->sector, &inode->data);
 
     free (inode); 
   }
@@ -265,7 +268,7 @@ inode_close (struct inode *inode)
 
 /* Marks INODE to be deleted when it is closed by the last caller who
    has it open. */
-  void
+void
 inode_remove (struct inode *inode) 
 {
   ASSERT (inode != NULL);
@@ -335,17 +338,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     return 0;
 
   if (offset + size > inode_length(inode))
-  {
-    if (!inode->data.isdir)
-    {
-      inode_lock(inode);
-    }
     inode->data.length = inode_expand(inode, offset + size);
-    if (!inode->data.isdir)
-    {
-      inode_unlock(inode);
-    }
-  }
 
   while (size > 0) 
   {
@@ -642,14 +635,4 @@ bool inode_add_parent (block_sector_t parent_sector,
   }
   inode->data.parent = parent_sector;
   return true;
-}
-
-void inode_lock (const struct inode *inode)
-{
-  lock_acquire(&((struct inode *)inode)->lock);
-}
-
-void inode_unlock (const struct inode *inode)
-{
-  lock_release(&((struct inode *) inode)->lock);
 }

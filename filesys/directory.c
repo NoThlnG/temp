@@ -202,13 +202,13 @@ dir_remove (struct dir *dir, const char *name)
     goto done;
   
   /* Open inode. */
-  inode = inode_open (e.inode_sector);
+  inode = inode_is_open (e.inode_sector);
   if (inode == NULL)
     goto done;
   
   if (inode == dir_get_inode(thread_current()->cwd))
     goto done;
-  if (inode_is_dir(inode) && (!dir_is_empty(inode) || inode_get_open_cnt(inode)>2))
+  if (inode_is_dir(inode) && (!dir_is_empty(inode) || inode_get_open_cnt(inode)>1))
     goto done;
   /* Erase directory entry. */
   e.in_use = false;

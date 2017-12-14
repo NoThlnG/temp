@@ -107,7 +107,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-
+  thread_mlfqs = true;
   if(thread_mlfqs){
     gl_load_avg = 0;
   }

@@ -9,6 +9,7 @@ struct bitmap;
 
 void inode_init (void);
 bool inode_create (block_sector_t, off_t, bool);
+struct inode *inode_is_open (block_sector_t);
 struct inode *inode_open (block_sector_t);
 struct inode *inode_reopen (struct inode *);
 block_sector_t inode_get_inumber (const struct inode *);
@@ -24,7 +25,5 @@ int inode_get_open_cnt (const struct inode *inode);
 block_sector_t inode_get_parent (const struct inode *inode);
 bool inode_add_parent (block_sector_t parent_sector,
 		       block_sector_t child_sector);
-void inode_lock (const struct inode *inode);
-void inode_unlock (const struct inode *inode);
 
 #endif /* filesys/inode.h */
