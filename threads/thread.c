@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/directory.h"
 #endif
 
 #include "devices/timer.h"
@@ -387,7 +388,7 @@ thread_tid (void)
 
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
-  void
+ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
@@ -400,10 +401,6 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it call schedule_tail(). */
   intr_disable ();
-  //#ifdef USERPROG
-  // 	struct thread* cur = thread_current();
-  //	printf("%s: exit(%d)\n",cur->name,getCIFromTid(cur->tid)->exitCode);
-  //#endif
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();

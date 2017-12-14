@@ -8,6 +8,7 @@
 #include "threads/malloc.h"
 
 #include "filesys/file.h"
+#include "filesys/inode.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
 
@@ -19,35 +20,53 @@ static struct list fd_list;
 
 struct lock FILELOCK;
 
-int currentFd(struct thread *cur)
+int currentFd(struct thread *cur, bool isdir)
 {
   struct list_elem *e = list_begin(&fd_list);
   int result = 0;
   for(;e!=list_end(&fd_list);e=list_next(e))
   {
     struct fd_elem *fe = list_entry(e,struct fd_elem, elem);
-    if(fe->owner == cur)
-      result++;
+    if(fe->owner == cur) {
+      if((!isdir && fe->fd % 2 == 1) || (isdir && fe->fd % 2 == 0))
+        result = fe->fd;
+    }
+  }
+  if(result == 0)
+  {
+    if(!isdir)
+      result = 3;
+    else
+      result = 4;
   }
   return result;
 }
 
-struct file* getFile(int fd, struct thread *cur)
+void* getFile(int fd, struct thread *cur)
+{
+  void* result = NULL;
+  struct fd_elem *fe =  getFD_elem(fd, cur);
+  if(fd % 2 == 1) {
+    result = fe->file;
+    if(fe->isEXE)
+      file_deny_write(fe->file);
+  }
+  else
+    result = fe->dir;
+   
+  return result;
+}
+
+struct fd_elem* getFD_elem(int fd, struct thread *cur)
 {
   struct list_elem *e = list_begin(&fd_list);
-  struct file* result = NULL;
   for(;e!=list_end(&fd_list);e=list_next(e))
   {
     struct fd_elem *fe = list_entry(e,struct fd_elem, elem);
     if(fe->owner == cur && fe->fd == fd)
-    {
-      result = fe->file;
-      if(fe->isEXE)
-	file_deny_write(fe->file);
-      break;
-    }
+      return fe;
   }
-  return result;
+  return NULL; 
 }
 
 void
@@ -90,17 +109,17 @@ syscall_handler (struct intr_frame *f)
 	break;
     case SYS_CLOSE: syscall_close(f,1);      
 	break;
-/*    case SYS_CHDIR: syscall_chdir(f, 1);
+    case SYS_CHDIR: syscall_chdir(f, 1);
         break;
-    case SYS_MKDIR: syscall_chdir(f, 1);
+    case SYS_MKDIR: syscall_mkdir(f, 1);
         break;
-    case SYS_READDIR: syscall_chdir(f, 2);
+    case SYS_READDIR: syscall_readdir(f, 2);
         break;
-    case SYS_ISDIR: syscall_chdir(f, 1);
+    case SYS_ISDIR: syscall_isdir(f, 1);
         break;
-    case SYS_INUMBER: syscall_chdir(f, 1);
+    case SYS_INUMBER: syscall_inumber(f, 1);
         break;
-*/
+
   }	
 }
 
@@ -118,11 +137,13 @@ void allClose(struct thread *cur)
     struct fd_elem *fe = list_entry(e,struct fd_elem, elem);
     if(fe->owner == cur)
     {
-      file_close(fe->file);
+      if(fe->fd % 2 == 1)
+        file_close(fe->file);
+      else 
+        dir_close(fe->dir);
       list_remove(e);	
       e=list_prev(e);
       free(fe);
-
     }
   }
 }
@@ -146,7 +167,6 @@ void syscall_exit(struct intr_frame *f,int argsNum)
   if(ci != NULL){
     ci->exitCode = status;
   }
-
   if(FILELOCK.holder != cur)
     lock_acquire(&FILELOCK);
   allClose(cur);
@@ -154,7 +174,6 @@ void syscall_exit(struct intr_frame *f,int argsNum)
     lock_release(&FILELOCK);
 
   printf("%s: exit(%d)\n",cur->name,status);
-
   thread_exit();
 }
 
@@ -216,14 +235,14 @@ void syscall_create(struct intr_frame *f,int argsNum){
 
   char* file = *(char **)(esp+4);
   uint32_t initial_size = *(uint32_t *)(esp+8);
-
   if(strlen(file) <= 0)
   {
     f->eax = 0;
     return;
-  }
+  } 
+ 
   lock_acquire(&FILELOCK);
-  bool result = filesys_create(file, initial_size, true);
+  bool result = filesys_create(file, initial_size, false);
   lock_release(&FILELOCK);
   f->eax = (int)result;
 }
@@ -258,21 +277,24 @@ void syscall_open(struct intr_frame *f,int argsNum){
 
   lock_acquire(&FILELOCK);
   struct file* file = filesys_open(filename);
-
   if(file != NULL){
     struct fd_elem *fe = (struct fd_elem *)malloc(sizeof(struct fd_elem));
-
     fe->owner = cur;
-    fe->file = file;
-    fe->fd = currentFd(fe->owner)+2;	// above 2
-    fe->filename = filename;
-    if(checkIsThread(filename))
-    {
-      fe->isEXE = true;
-    } else fe->isEXE = false;
-
+    if(!inode_is_dir(file_get_inode(file))) {
+      fe->file = file;
+      fe->fd = currentFd(fe->owner, false) + 2;
+      fe->filename = filename;
+    
+      if(checkIsThread(filename))
+      {
+        fe->isEXE = true;
+      } else fe->isEXE = false;
+    }
+    else {
+      fe->dir = (struct dir *)file;
+      fe->fd = currentFd(fe->owner, true) + 2;
+    }
     list_push_back(&fd_list,&fe->elem);
-
     f->eax = fe->fd;
   } else f->eax = -1;
   lock_release(&FILELOCK);
@@ -311,7 +333,7 @@ void syscall_read(struct intr_frame *f,int argsNum){
       buffer[i] = input_getc();		
     }
     f->eax = size;
-  } else if(fd == 1){
+  } else if(fd == 1 || fd % 2 == 0){
     f->eax = -1;
   } else {
     struct file *file = getFile(fd,thread_current());
@@ -340,16 +362,13 @@ void syscall_write (struct intr_frame *f,int argsNum)
   {
     putbuf((char *)buffer,size);
     f->eax = size;
-  } else if (fd == 0){
+  } else if (fd == 0 || fd % 2 == 0){
     f->eax = -1;
   } else {
     struct file *file = getFile(fd,thread_current());
     if (file != NULL)
-    {
-      if(file_tell(file) >= file_length(file))	// EOF
-	f->eax = 0;
-      else f->eax = file_write(file,buffer,size);
-    }
+      f->eax = file_write(file,buffer,size);
+
     else f->eax = -1;
   }
   lock_release(&FILELOCK);
@@ -365,9 +384,7 @@ void syscall_seek(struct intr_frame *f,int argsNum){
   lock_acquire(&FILELOCK);
   struct file *file = getFile(fd,thread_current());
   if(file != NULL)
-  {
     file_seek(file,position);		
-  }
 
   lock_release(&FILELOCK);
 }
@@ -420,7 +437,7 @@ void syscall_close(struct intr_frame *f,int argsNum){
   lock_release(&FILELOCK);
 }
 
-/*
+
 void syscall_chdir (struct intr_frame *f, int argsNum) 
 {
   void* esp = f->esp;
@@ -437,7 +454,6 @@ void syscall_mkdir (struct intr_frame *f, int argsNum)
   checkARG
 
   const char* dir = *(const char **)(esp+4);
-
   f->eax = filesys_create(dir, 0, true);
 }
 
@@ -449,16 +465,12 @@ void syscall_readdir (struct intr_frame *f, int argsNum)
   int fd = *(int *)(esp+4);
   char* name = *(char **)(esp+8);
 
-  struct file *pf = getFile(fd, thread_current());
-  if (!pf) {
+  struct dir *dir = getFile(fd, thread_current());
+  if (!dir) {
     f->eax = false;
     return;
   }
-  if (!pf->isdir) {
-    f->eax = false;
-    return;
-  }
-  if (!dir_readdir(pf->dir, name)) {
+  if (!dir_readdir(dir, name)) {
     f->eax = false;
     return;
   }
@@ -470,16 +482,13 @@ void syscall_isdir (struct intr_frame *f, int argsNum)
 {
   void* esp = f->esp;
   checkARG
-
   int fd = *(int *)(esp+4);
 
-  struct process_file *pf = getFile(fd, thread_current());
-  if (!pf)
-    {
-      f->eax = -1;
-      return;
-    }
-  f->eax = pf->isdir;
+  struct fd_elem *fe = getFD_elem(fd, thread_current());
+  if(fe->fd % 2 == 0)
+    f->eax = true;
+  else 
+    f->eax = false;
 }
 
 void syscall_inumber (struct intr_frame *f, int argsNum)
@@ -489,21 +498,18 @@ void syscall_inumber (struct intr_frame *f, int argsNum)
 
   int fd = *(int *)(esp+4);
 
-  struct process_file *pf = getFile(fd, thread_current());
-  if (!pf)
+  struct fd_elem *fe = getFD_elem(fd, thread_current());
+  if (!fe)
     {
       f->eax = -1;
       return;
     }
-  block_sector_t inumber;
-  if (pf->isdir)
-    {
-      inumber = inode_get_inumber(dir_get_inode(pf->dir));
-    }
-  else
-    {
-      inumber = inode_get_inumber(file_get_inode(pf->file));
-    }
+  block_sector_t inumber = -1;
+  if (fe->fd % 2 == 0)
+    inumber = inode_get_inumber(dir_get_inode(fe->dir));
+  else 
+    inumber = inode_get_inumber(file_get_inode(fe->file));
+
   f->eax = inumber;
 }
-*/
+

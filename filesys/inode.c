@@ -148,7 +148,7 @@ inode_init (void)
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-  bool
+bool
 inode_create (block_sector_t sector, off_t length, bool isdir)
 {
   struct inode_disk *disk_inode = NULL;
@@ -220,7 +220,7 @@ inode_open (block_sector_t sector)
 }
 
 /* Reopens and returns INODE. */
-  struct inode *
+struct inode *
 inode_reopen (struct inode *inode)
 {
   if (inode != NULL)
@@ -244,7 +244,6 @@ inode_close (struct inode *inode)
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
-
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
   {
@@ -257,21 +256,9 @@ inode_close (struct inode *inode)
       free_map_release (inode->sector, 1);
       inode_dealloc(inode);
     }
-    else
-    {
-      struct inode_disk disk_inode = {
-	.length = inode->data.length,
-	.magic = INODE_MAGIC,
-	.i_dir = inode->data.i_dir,
-	.i_indir = inode->data.i_indir,
-	.i_doubly = inode->data.i_doubly,
-	.isdir = inode->data.isdir,
-	.parent = inode->data.parent,
-      };
-      memcpy(&disk_inode.ptr, &inode->data.ptr,
-	  10*sizeof(block_sector_t));
-      block_write(fs_device, inode->sector, &disk_inode);
-    }
+//    else
+//      block_write(fs_device, inode->sector, &inode->data);
+
     free (inode); 
   }
 }
@@ -654,7 +641,6 @@ bool inode_add_parent (block_sector_t parent_sector,
     return false;
   }
   inode->data.parent = parent_sector;
-  inode_close(inode);
   return true;
 }
 

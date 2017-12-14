@@ -122,8 +122,6 @@ process_execute (const char *file_name)
   return tid;
 }
 
-
-
 /* A thread function that loads a user process and starts it
    running. */
   static void
@@ -275,14 +273,14 @@ remove_ci(struct thread *cur)
   }
 }
 
-  void
+void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  if(thread_current()->cwd)
-    dir_close(thread_current()->cwd);
+//  if(thread_current()->cwd)
+//    dir_close(thread_current()->cwd);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

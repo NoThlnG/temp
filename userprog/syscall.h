@@ -26,21 +26,23 @@ void syscall_readdir(struct intr_frame *f,int argsNum);
 void syscall_isdir(struct intr_frame *f,int argsNum);
 void syscall_inumber(struct intr_frame *f,int argsNum);
 
-int currentFd(struct thread *cur);
+int currentFd(struct thread *cur, bool);
 
-struct file* getFile(int fd,struct thread *cur);
+void* getFile(int fd,struct thread *cur);
+struct fd_elem* getFD_elem(int fd, struct thread *cur);
 
 void elemFile(struct file *file);
 
 void allClose(struct thread *cur);
 
 struct fd_elem{
-	struct list_elem elem;
-	struct thread* owner;
-	struct file *file;
-	char* filename;
-	int fd;
-	bool isEXE;
+  struct list_elem elem;
+  struct thread* owner;
+  struct file *file;
+  struct dir * dir;
+  char* filename;
+  int fd;
+  bool isEXE;
 };
 
 #endif /* userprog/syscall.h */

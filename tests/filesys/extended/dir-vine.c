@@ -17,9 +17,8 @@ void
 test_main (void) 
 {
   int i;
-
   msg ("creating many levels of files and directories...");
-  quiet = true;
+  quiet = false;
   CHECK (mkdir ("start"), "mkdir \"start\"");
   CHECK (chdir ("start"), "chdir \"start\"");
   for (i = 0; ; i++) 
