@@ -412,8 +412,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
 
-  lock_acquire(&FILELOCK);
-
   file = filesys_open (file_name);
   if (file == NULL) 
   {
@@ -506,7 +504,6 @@ done:
   /* We arrive here whether the load is successful or not. */
   if(!success)
     file_close (file);
-  lock_release(&FILELOCK);
   return success;
 }
 

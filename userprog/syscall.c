@@ -18,8 +18,6 @@
 static void syscall_handler (struct intr_frame *);
 static struct list fd_list;
 
-struct lock FILELOCK;
-
 int currentFd(struct thread *cur, bool isdir)
 {
   struct list_elem *e = list_begin(&fd_list);
@@ -41,17 +39,6 @@ int currentFd(struct thread *cur, bool isdir)
   }
   return result;
 }
-
-/*struct fd_elem* evictFD_elem() {
-  struct list_elem *e = list_begin(&fd_list);
-  struct fd_elem *fe;
-  for(;e!=list_end(&fd_list);e=list_next(e))
-  {
-    fe = list_entry(e,struct fd_elem, elem);
-    if(fe==NULL)
-      return fe;
-  }
-}*/
 
 void* getFile(int fd, struct thread *cur)
 {
@@ -85,7 +72,6 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   list_init(&fd_list);
-  lock_init(&FILELOCK);
 }
 
 static void
@@ -178,11 +164,7 @@ void syscall_exit(struct intr_frame *f,int argsNum)
   if(ci != NULL){
     ci->exitCode = status;
   }
-  if(FILELOCK.holder != cur)
-    lock_acquire(&FILELOCK);
   allClose(cur);
-  if(FILELOCK.holder == cur)
-    lock_release(&FILELOCK);
 
   printf("%s: exit(%d)\n",cur->name,status);
   thread_exit();
@@ -252,24 +234,18 @@ void syscall_create(struct intr_frame *f,int argsNum){
     return;
   } 
  
-  lock_acquire(&FILELOCK);
   bool result = filesys_create(file, initial_size, false);
-  lock_release(&FILELOCK);
   f->eax = (int)result;
 }
 
 void syscall_remove(struct intr_frame *f,int argsNum){
-
   void*esp = f->esp;
   checkARG
 
   char* file = *(char **)(esp+4);
 
-  lock_acquire(&FILELOCK);
   bool result = filesys_remove(file);
-  lock_release(&FILELOCK);
   f->eax = (int)result;
-
 }
 
 void syscall_open(struct intr_frame *f,int argsNum){
@@ -286,9 +262,7 @@ void syscall_open(struct intr_frame *f,int argsNum){
 
   struct thread *cur = thread_current();
 
-  lock_acquire(&FILELOCK);
   struct file* file = filesys_open(filename);
-  lock_release(&FILELOCK);
   if(file != NULL){
     struct fd_elem *fe = (struct fd_elem *)malloc(sizeof(struct fd_elem));
     fe->owner = cur;
@@ -369,11 +343,9 @@ void syscall_write (struct intr_frame *f,int argsNum)
     f->eax = -1;
   } else {
     struct file *file = getFile(fd,thread_current());
-    if (file != NULL) {
-      lock_acquire(&FILELOCK);
+    if (file != NULL) 
       f->eax = file_write(file,buffer,size);
-      lock_release(&FILELOCK);
-    }
+    
     else f->eax = -1;
   }
 }
@@ -385,12 +357,10 @@ void syscall_seek(struct intr_frame *f,int argsNum){
   int fd = *(int *)(esp+4);
   uint32_t position = *(uint32_t *)(esp+8);
 
-  lock_acquire(&FILELOCK);
   struct file *file = getFile(fd,thread_current());
   if(file != NULL)
     file_seek(file,position);		
 
-  lock_release(&FILELOCK);
 }
 
 void syscall_tell(struct intr_frame *f,int argsNum){
@@ -418,11 +388,7 @@ void syscall_close(struct intr_frame *f,int argsNum){
   {
     struct file* file = fe->file;
     if(file != NULL)
-    {
-      lock_acquire(&FILELOCK);
       file_close(file);
-      lock_release(&FILELOCK);
-    }
   }
   else
   {

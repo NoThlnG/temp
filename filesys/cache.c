@@ -98,6 +98,7 @@ struct cache_entry* check_cache (block_sector_t sector, bool dirty)
 
 void cache_write_all (bool clear)
 {
+  lock_acquire(&CACHELOCK);  
   struct list_elem *next, *e;
   for(e= list_begin(&cache_list); e != list_end(&cache_list);)
   {
@@ -115,6 +116,7 @@ void cache_write_all (bool clear)
     }
     e = next;
   }
+  lock_acquire(&CACHELOCK);  
 }
 
 void thread_func_write_back(void *aux UNUSED)
