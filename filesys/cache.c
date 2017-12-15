@@ -8,7 +8,8 @@ void cache_init (void)
 {
   list_init(&cache_list);
   cache_size = 0;
-  thread_create("write_back_thread", 0, thread_func_write_back, NULL);
+  lock_init(&CACHELOCK);
+  thread_create("write_back_thread", PRI_MAX, thread_func_write_back, NULL);
 }
 
 struct cache_entry* get_cache (block_sector_t sector)
@@ -78,6 +79,7 @@ struct cache_entry* evict_cache(void) {
 
 struct cache_entry* check_cache (block_sector_t sector, bool dirty)
 {
+  lock_acquire(&CACHELOCK);  
   struct cache_entry *c = get_cache(sector);
 
   if(c) {
@@ -90,7 +92,7 @@ struct cache_entry* check_cache (block_sector_t sector, bool dirty)
     if (!c)
       PANIC("Not enough memory for buffer cache.");
   }
-
+  lock_release(&CACHELOCK);
   return c;
 }
 
@@ -119,7 +121,8 @@ void thread_func_write_back(void *aux UNUSED)
 {
   while(true)
   {
-    timer_sleep(4*TIMER_FREQ);
+    timer_sleep(5*TIMER_FREQ);
     cache_write_all(false);
   }
 }
+

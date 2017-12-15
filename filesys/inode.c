@@ -14,6 +14,18 @@
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+struct data_group
+{
+  block_sector_t parent;
+  off_t length;
+  unsigned magic;
+  block_sector_t ptr[10];
+  bool isdir;
+  int i_dir;
+  int i_indir;
+  int i_doubly;
+};
+
 struct inode_disk
 {
   block_sector_t parent;               /* First data sector. */
@@ -38,7 +50,7 @@ struct inode
   int open_cnt;                       /* Number of openers. */
   bool removed;                       /* True if deleted, false otherwise. */
   int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-  struct inode_disk data;
+  struct data_group data;
   off_t read_length;
 };
 
@@ -217,8 +229,16 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  block_read(fs_device, inode->sector, &inode->data);
-  inode->read_length = inode->data.length;
+  struct inode_disk data;
+  block_read(fs_device, inode->sector, &data);
+  inode->read_length = data.length;
+  inode->data.length = data.length;
+  inode->data.i_dir = data.i_dir;
+  inode->data.i_indir = data.i_indir;
+  inode->data.i_doubly = data.i_doubly;	
+  inode->data.isdir = data.isdir;
+  inode->data.parent = data.parent;
+  memcpy(&inode->data.ptr, &data.ptr, 10*sizeof(block_sector_t));
   return inode;
 }
 
@@ -259,8 +279,21 @@ inode_close (struct inode *inode)
       free_map_release (inode->sector, 1);
       inode_dealloc(inode);
     }
-    else
-      block_write(fs_device, inode->sector, &inode->data);
+    else 
+	{
+	  struct inode_disk disk_inode = {
+	    .length = inode->data.length,
+	    .magic = INODE_MAGIC,
+	    .i_dir = inode->data.i_dir,
+	    .i_indir = inode->data.i_indir,
+	    .i_doubly = inode->data.i_doubly,
+	    .isdir = inode->data.isdir,
+	    .parent = inode->data.parent,
+	  };
+	  memcpy(&disk_inode.ptr, &inode->data.ptr,
+		 10*sizeof(block_sector_t));
+	  block_write(fs_device, inode->sector, &disk_inode);
+	}
 
     free (inode); 
   }
@@ -634,5 +667,6 @@ bool inode_add_parent (block_sector_t parent_sector,
     return false;
   }
   inode->data.parent = parent_sector;
+  inode_close(inode);
   return true;
 }

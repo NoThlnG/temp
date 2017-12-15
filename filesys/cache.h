@@ -2,10 +2,12 @@
 #define FILESYS_CACHE_H
 
 #include "devices/block.h"
+#include "threads/synch.h"
 #include <list.h>
 
 struct list cache_list;
 uint32_t cache_size;
+struct lock CACHELOCK;
 
 struct cache_entry {
   uint8_t block[BLOCK_SECTOR_SIZE];
@@ -23,5 +25,7 @@ struct cache_entry* evict_cache (void);
 struct cache_entry* check_cache (block_sector_t, bool);
 void cache_write_all (bool);
 void thread_func_write_back (void *aux);
+void thread_create_read_ahead (block_sector_t sector);
+void thread_func_read_ahead (void *aux);
 
 #endif /* filesys/cache.h */

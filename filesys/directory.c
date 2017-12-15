@@ -203,8 +203,8 @@ dir_remove (struct dir *dir, const char *name)
   
   /* Open inode. */
   inode = inode_is_open (e.inode_sector);
-  if (inode == NULL)
-    goto done;
+  if (inode == NULL) 
+    inode = inode_open(e.inode_sector);
   
   if (inode == dir_get_inode(thread_current()->cwd))
     goto done;

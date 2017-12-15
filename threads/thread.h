@@ -19,6 +19,7 @@ enum thread_status
 typedef int tid_t;
 
 struct thread;
+struct list sleep_list;
 
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
@@ -106,7 +107,7 @@ struct thread
   unsigned magic;                     /* Detects stack overflow. */
 
   /* ----- for me ---- */
-
+  int64_t ticks;
   int oPriority;		// original priority
   struct list donate_list;	// donate_list
 
@@ -118,6 +119,7 @@ struct thread
   struct file* e_file;
 
   struct dir* cwd;
+  struct semaphore c_sema;
 };
 
 struct donate
@@ -221,5 +223,7 @@ int divxn(int x, int n);
 
 //struct thread* 
 //getThreadFromId(int id,int flag);
+
+bool compare_ticks(const struct list_elem*, const struct list_elem*, void *aux UNUSED);
 
 #endif /* threads/thread.h */

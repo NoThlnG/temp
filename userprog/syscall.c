@@ -42,6 +42,17 @@ int currentFd(struct thread *cur, bool isdir)
   return result;
 }
 
+/*struct fd_elem* evictFD_elem() {
+  struct list_elem *e = list_begin(&fd_list);
+  struct fd_elem *fe;
+  for(;e!=list_end(&fd_list);e=list_next(e))
+  {
+    fe = list_entry(e,struct fd_elem, elem);
+    if(fe==NULL)
+      return fe;
+  }
+}*/
+
 void* getFile(int fd, struct thread *cur)
 {
   void* result = NULL;
@@ -316,7 +327,6 @@ void syscall_filesize(struct intr_frame *f,int argsNum){
 }
 
 void syscall_read(struct intr_frame *f,int argsNum){
-
   void*esp = f->esp;
   checkARG
 
@@ -337,11 +347,7 @@ void syscall_read(struct intr_frame *f,int argsNum){
   } else {
     struct file *file = getFile(fd,thread_current());
     if (file != NULL)
-    {
-      if(file_tell(file) >= file_length(file))
-	f->eax = 0;
-      else f->eax = file_read(file,buffer,size);
-    }
+      f->eax = file_read(file,buffer,size);
     else f->eax = -1;
   }
 }
@@ -416,21 +422,17 @@ void syscall_close(struct intr_frame *f,int argsNum){
       lock_acquire(&FILELOCK);
       file_close(file);
       lock_release(&FILELOCK);
-      list_remove(&fe->elem); 
-      free(fe); 
     }
   }
   else
   {
     struct dir* dir = fe->dir;
-    if(dir != NULL) {
+    if(dir != NULL) 
       dir_close(dir); 
-      list_remove(&fe->elem); 
-      free(fe);
-    } 
   }
+  list_remove(&fe->elem); 
+  free(fe);
 }
-
 
 void syscall_chdir (struct intr_frame *f, int argsNum) 
 {

@@ -107,7 +107,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-  thread_mlfqs = true;
+  list_init (&sleep_list);
   if(thread_mlfqs){
     gl_load_avg = 0;
   }
@@ -165,7 +165,6 @@ thread_tick (void)
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
-    //++thread_ticks;
     intr_yield_on_return ();
 
   if (thread_mlfqs)
@@ -306,7 +305,7 @@ thread_create (const char *name, int priority,
    primitives in synch.h. */
 
 
-  void
+void
 thread_block (void) 
 {
   ASSERT (!intr_context ());
@@ -325,7 +324,7 @@ thread_block (void)
    it may expect that it can atomically unblock a thread and
    update other data. */
 
-  void
+void
 thread_unblock (struct thread *t) 
 {
   enum intr_level old_level;
@@ -346,7 +345,7 @@ thread_unblock (struct thread *t)
 
 
 
-  bool 
+bool 
 compare_pri(const struct list_elem *e1, const struct list_elem *e2, void *aux UNUSED)
 {
   return list_entry(e1,struct thread, elem)->priority	
@@ -354,7 +353,7 @@ compare_pri(const struct list_elem *e1, const struct list_elem *e2, void *aux UN
 }
 
 /* Returns the name of the running thread. */
-  const char *
+const char *
 thread_name (void) 
 {
   return thread_current ()->name;
@@ -363,7 +362,7 @@ thread_name (void)
 /* Returns the running thread.
    This is running_thread() plus a couple of sanity checks.
    See the big comment at the top of thread.h for details. */
-  struct thread *
+struct thread *
 thread_current (void) 
 {
   struct thread *t = running_thread ();
@@ -388,7 +387,7 @@ thread_tid (void)
 
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
- void
+void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
@@ -725,7 +724,7 @@ is_thread (struct thread *t)
 
 /* Does basic initialization of T as a blocked thread named
    NAME. */
-  static void
+static void
 init_thread (struct thread *t, const char *name, int priority)
 {
   ASSERT (t != NULL);
@@ -744,7 +743,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
    returns a pointer to the frame's base. */
-  static void *
+static void *
 alloc_frame (struct thread *t, size_t size) 
 {
   /* Stack data is always allocated in word-size units. */
@@ -760,7 +759,7 @@ alloc_frame (struct thread *t, size_t size)
    empty.  (If the running thread can continue running, then it
    will be in the run queue.)  If the run queue is empty, return
    idle_thread. */
-  static struct thread *
+static struct thread *
 next_thread_to_run (void) 
 {
   if (list_empty (&ready_list))	return idle_thread;
@@ -783,7 +782,7 @@ next_thread_to_run (void)
 
    After this function and its caller returns, the thread switch
    is complete. */
-  void
+void
 thread_schedule_tail (struct thread *prev) 
 {
   struct thread *cur = running_thread ();
@@ -820,7 +819,7 @@ thread_schedule_tail (struct thread *prev)
 
    It's not safe to call printf() until schedule_tail() has
    completed. */
-  static void
+static void
 schedule (void) 
 {
   struct thread *cur = running_thread ();
@@ -837,7 +836,7 @@ schedule (void)
 }
 
 /* Returns a tid to use for a new thread. */
-  static tid_t
+static tid_t
 allocate_tid (void) 
 {
   static tid_t next_tid = 1;
@@ -854,7 +853,7 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-  struct thread*
+struct thread*
 getThreadFromTid(tid_t tid)
 
 {
@@ -955,4 +954,12 @@ bool checkIsThread(char* filename)
       return true;
   }
   return false;
+}
+
+bool compare_ticks(const struct list_elem *a, const struct list_elem *b,
+                   void *aux UNUSED)
+{
+  struct thread *ta = list_entry(a, struct thread, elem);
+  struct thread *tb = list_entry(b, struct thread, elem);
+  return (ta->ticks < tb->ticks);
 }

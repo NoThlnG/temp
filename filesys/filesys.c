@@ -17,7 +17,7 @@ static void do_format (void);
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
-  void
+void
 filesys_init (bool format) 
 {
   fs_device = block_get_role (BLOCK_FILESYS);
@@ -25,7 +25,7 @@ filesys_init (bool format)
     PANIC ("No file system device found, can't initialize file system.");
 
   inode_init ();
-  cache_init();
+  cache_init ();
   free_map_init ();
 
   if (format) 
@@ -51,7 +51,7 @@ bool
 filesys_create (const char *name, off_t initial_size, bool isdir) 
 {
   block_sector_t inode_sector = 0;
-  struct dir *dir = get_dir(name, true);
+  struct dir *dir = get_dir(name, !isdir);
   char *filename = get_filename(name);
   bool success = false;
   if (strcmp(filename, ".") != 0 && strcmp(filename, "..") != 0)

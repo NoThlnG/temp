@@ -22,7 +22,7 @@ test_main (void)
   CHECK ((fd = open (file_name)) > 1, "open \"%s\"", file_name);
 
   exec_children ("child-syn-rw", children, CHILD_CNT);
-
+  msg("changed");
   random_bytes (buf, sizeof buf);
   quiet = true;
   for (ofs = 0; ofs < BUF_SIZE; ofs += CHUNK_SIZE)
